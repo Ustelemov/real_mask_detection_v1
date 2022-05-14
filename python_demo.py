@@ -1,4 +1,3 @@
-# -*- coding: UTF-8 -*-
 import argparse
 import time
 import cv2
@@ -14,8 +13,6 @@ import argparse
 import time
 from sort import Sort
 import uuid
-
-
 
 from models.experimental import attempt_load
 from utils.datasets import letterbox
@@ -43,17 +40,12 @@ def detect(model, orgimg, device):
     # Convert
     img = img[:, :, ::-1].transpose(2, 0, 1).copy()  # BGR to RGB, to 3x416x416
 
-    # Run inference
-    t0 = time.time()
-
     img = torch.from_numpy(img).to(device)
     img = img.float()  # uint8 to fp16/32
     img /= 255.0  # 0 - 255 to 0.0 - 1.0
     if img.ndimension() == 3:
         img = img.unsqueeze(0)
 
-    # Inference
-    t1 = time_synchronized()
     pred = model(img)[0]
 
     # Apply NMS
@@ -78,10 +70,10 @@ def detect(model, orgimg, device):
                 width = x_bottom_right - x_top_left
                 height = y_bottom_right - y_top_left
 
-                x_top_left = int(x_top_left - width*0.4)
-                y_top_left = int(y_top_left - height*0.4)
-                x_bottom_right = int(x_bottom_right + width*0.4)
-                y_bottom_right = int(y_bottom_right + height*0.4)
+                x_top_left = int(x_top_left - width*0.3)
+                y_top_left = int(y_top_left - height*0.3)
+                x_bottom_right = int(x_bottom_right + width*0.3)
+                y_bottom_right = int(y_bottom_right + height*0.3)
 
                 x_top_left = 0 if x_top_left < 0 else x_top_left
                 y_top_left = 0 if y_top_left < 0 else y_top_left
@@ -104,6 +96,7 @@ class FaceData:
         self.path = "./output/saved_faces"
         self.detections_count_threshold = 10
         self.detections_score_threshold = 0.7
+        self.detections_max_score_threshold = 0.75
 
     def add(self, id, arr, score):
         if id not in self.faces:
@@ -124,59 +117,64 @@ class FaceData:
         #remove element
         del self.faces[id]
 
+        #if not enought detections
         if len(dataArr) < self.detections_count_threshold:
             return
 
         max_score = 0
+        score_threshold_count = 0
         img = []
 
-        count_score = 0
         for data in dataArr[:]:
+            if data[1] > max_score:
+                max_score = data[1]
+                img = data[0]
             if data[1] > self.detections_score_threshold:
-                count_score = count_score + 1
-                if data[1] > max_score:
-                    max_score = data[1]
-                    img = data[0]
+                score_threshold_count += 1
             
-
-        if count_score < self.detections_count_threshold:
+        #if max_score not enough
+        if max_score < self.detections_max_score_threshold:
             return
 
+        #if not enough detections with threshold score
+        if score_threshold_count < self.detections_count_threshold:
+            return
 
         mkdir(self.path)
 
         h,w,c = img.shape
         id = str(uuid.uuid1())
 
-        cv2.imwrite("{0}/{1}_{2}_{3}_{4}.jpg".format(self.path, id, time.time(), w,h), img)
+        cv2.imwrite("{0}/{1}_{2}_{3}.jpg".format(self.path, id, w,h), img)
 
-        img_64 = cv2.resize(img, (64,64))
-        cv2.imwrite("{0}/{1}_{2}_64_64.jpg".format(self.path, id, time.time()), img_64)
+        # img_64 = cv2.resize(img, (64,64))
+        # cv2.imwrite("{0}/{1}_{2}_64_64.jpg".format(self.path, id, time.time()), img_64)
 
-        img_96 = cv2.resize(img, (96,96))
-        cv2.imwrite("{0}/{1}_{2}_96_96.jpg".format(self.path, id, time.time()), img_96)
+        # img_96 = cv2.resize(img, (96,96))
+        # cv2.imwrite("{0}/{1}_{2}_96_96.jpg".format(self.path, id, time.time()), img_96)
 
-        img_128 = cv2.resize(img, (128,128))
-        cv2.imwrite("{0}/{1}_{2}_128_128.jpg".format(self.path, id, time.time()), img_128)
+        # img_128 = cv2.resize(img, (128,128))
+        # cv2.imwrite("{0}/{1}_{2}_128_128.jpg".format(self.path, id, time.time()), img_128)
 
-        img_160 = cv2.resize(img, (160,160))
-        cv2.imwrite("{0}/{1}_{2}_160_160.jpg".format(self.path, id, time.time()), img_160)
+        # img_160 = cv2.resize(img, (160,160))
+        # cv2.imwrite("{0}/{1}_{2}_160_160.jpg".format(self.path, id, time.time()), img_160)
 
-        img_196 = cv2.resize(img, (196,196))
-        cv2.imwrite("{0}/{1}_{2}_196_196.jpg".format(self.path, id, time.time()), img_196)
+        # img_196 = cv2.resize(img, (196,196))
+        # cv2.imwrite("{0}/{1}_{2}_196_196.jpg".format(self.path, id, time.time()), img_196)
 
-        img_224 = cv2.resize(img, (224,224))
-        cv2.imwrite("{0}/{1}_{2}_224_224.jpg".format(self.path, id, time.time()), img_224)
+        # img_224 = cv2.resize(img, (224,224))
+        # cv2.imwrite("{0}/{1}_{2}_224_224.jpg".format(self.path, id, time.time()), img_224)
 
 def process_image(image, predicts):
     h,w,c = image.shape
+    face_size_threshold = 10
 
     result_image = image.copy()
     faces = []
     for predict in predicts:
         x1, y1, x2, y2, score = predict     
 
-        if x2-x1 > 10 and y2-y1 > 10:
+        if x2-x1 > face_size_threshold and y2-y1 > face_size_threshold:
             faces.append(predict)
 
     trackers, removed = tracker.update(np.array(faces))
@@ -210,32 +208,37 @@ if __name__ == '__main__':
     mkdir("output")
 
     # Model
-    img_size = 384
-    conf_thres = 0.3
-    iou_thres = 0.3
+    img_size = 320
+    conf_thres = 0.2
+    iou_thres = 0.2
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = load_model('./weights/yolov5s-face.pt', device)
         
-    tracker = Sort(max_age=20, min_hits=10) 
+    tracker = Sort(max_age=15, min_hits=0) 
     face_data = FaceData()
-
 
     cap = cv2.VideoCapture('./input/input.mp4')
     length = int(cap. get(cv2. CAP_PROP_FRAME_COUNT))
     frame_count = 0
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter('./output/output.mp4', fourcc, 30.0, (400,400))
+    out = cv2.VideoWriter('./output/output.mp4', fourcc, 30.0, (400,300))
 
+    count_time = time.time()
+    all_time = time.time()
+
+    count_per_frames = 100
 
     while (cap.isOpened()):
         ret,frame = cap.read()
         if ret:
-            start = time.time()
-
             frame_count = frame_count + 1
-            print(frame_count," of ", length)
-
+            if frame_count%count_per_frames == 0:
+                print(frame_count," of ", length)
+                print("FPS (for %s): "%(count_per_frames), count_per_frames/(time.time()-count_time))
+                print("FPS (for all): ", frame_count/(time.time()-all_time))
+                print("Time all in minutes: %0.1f"%((time.time()-all_time)/60))
+                count_time = time.time()
 
             # input video already in (1280,720)
             frame = cv2.resize(frame, (1280,720))
@@ -248,7 +251,7 @@ if __name__ == '__main__':
             
             frame = process_image(image=frame, predicts=predicts)
 
-            cv2.imshow('Video', frame)
+            # cv2.imshow('Video', frame)
             out.write(frame)
 
             key = cv2.waitKey(1) & 0xFF
@@ -256,7 +259,6 @@ if __name__ == '__main__':
             # If the `q` key was pressed, break from the loop
             if key == ord("q"):
                 break
-            print("time: ", time.time()-start)
         else:
             break
 
