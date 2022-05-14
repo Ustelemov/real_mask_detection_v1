@@ -12,4 +12,4 @@ matplotlib==3.5.1
 filterpy==1.4.5
 imutils==0.5.4
 urllib3==1.26.9
-thop=0.0.31-2005241907
+thop==0.0.31-2005241907
