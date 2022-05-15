@@ -11,15 +11,21 @@ import sys
 import glob 
 import argparse
 import time
-from sort import Sort
+
+import urllib.request
+
 import uuid
+
+from time import strftime
+from time import gmtime
 
 from models.experimental import attempt_load
 from utils.datasets import letterbox
 from utils.general import check_img_size, non_max_suppression_face, apply_classifier, scale_coords, strip_optimizer, set_logging
 from utils.torch_utils import select_device, load_classifier, time_synchronized
 
-import urllib.request
+from sort import Sort
+
 
 def load_model(weights, device):
     model = attempt_load(weights, map_location=device)  # load FP32 model
@@ -54,6 +60,7 @@ def detect(model, orgimg, device):
     ret = []
 
     # Process detections
+    # Add 30% of width\height padding for face
     for i, det in enumerate(pred):  # detections per image
         gn = torch.tensor(orgimg.shape)[[1, 0, 1, 0]].to(device)  # normalization gain whwh
         if len(det):
@@ -91,17 +98,20 @@ def mkdir(path):
         os.makedirs(path)
 
 class FaceData:
-    def __init__(self):
+    def __init__(self, save_path, input_FPS):
+        self.input_FPS = input_FPS
         self.faces = dict()
-        self.path = "./output/saved_faces"
+        self.save_path = save_path
         self.detections_count_threshold = 10
         self.detections_score_threshold = 0.7
         self.detections_max_score_threshold = 0.75
 
-    def add(self, id, arr, score):
+        self.saved_count=0
+
+    def add(self, id, arr, score, frame_num):
         if id not in self.faces:
             self.faces[id] = []
-        self.faces[id].append((arr,score))
+        self.faces[id].append((arr,score, frame_num))
     
     def get_count(self,id):
         if id not in self.faces:
@@ -122,13 +132,16 @@ class FaceData:
             return
 
         max_score = 0
+
         score_threshold_count = 0
         img = []
+        frame_num = 0
 
         for data in dataArr[:]:
             if data[1] > max_score:
-                max_score = data[1]
                 img = data[0]
+                max_score = data[1]
+                frame_num = data[2]
             if data[1] > self.detections_score_threshold:
                 score_threshold_count += 1
             
@@ -140,32 +153,26 @@ class FaceData:
         if score_threshold_count < self.detections_count_threshold:
             return
 
-        mkdir(self.path)
+        mkdir(self.save_path)
 
         h,w,c = img.shape
         id = str(uuid.uuid1())
+        frame_time = strftime("%H:%M:%S", gmtime(int(frame_num/self.input_FPS)))
 
-        cv2.imwrite("{0}/{1}_{2}_{3}.jpg".format(self.path, id, w,h), img)
+        cv2.imwrite("{0}/{1}_{2}_{3}.jpg".format(self.save_path, id, w,h), img)
 
-        # img_64 = cv2.resize(img, (64,64))
-        # cv2.imwrite("{0}/{1}_{2}_64_64.jpg".format(self.path, id, time.time()), img_64)
+        #log for debug
+        self.saved_count += 1
+        print("---------saved id: %s (№ in dataset %s)---------"%(id, self.saved_count))
+        print("max_score: ",max_score)
+        print("all_count: ",len(dataArr))
+        print("score_threshold_count: ",score_threshold_count)
+        print("time: ",frame_time)
+        for data in dataArr:
+            print("score: %0.2f shape: %s"%(data[1], data[0].shape))
+        print("---------------------------------------------------------------------------------")
 
-        # img_96 = cv2.resize(img, (96,96))
-        # cv2.imwrite("{0}/{1}_{2}_96_96.jpg".format(self.path, id, time.time()), img_96)
-
-        # img_128 = cv2.resize(img, (128,128))
-        # cv2.imwrite("{0}/{1}_{2}_128_128.jpg".format(self.path, id, time.time()), img_128)
-
-        # img_160 = cv2.resize(img, (160,160))
-        # cv2.imwrite("{0}/{1}_{2}_160_160.jpg".format(self.path, id, time.time()), img_160)
-
-        # img_196 = cv2.resize(img, (196,196))
-        # cv2.imwrite("{0}/{1}_{2}_196_196.jpg".format(self.path, id, time.time()), img_196)
-
-        # img_224 = cv2.resize(img, (224,224))
-        # cv2.imwrite("{0}/{1}_{2}_224_224.jpg".format(self.path, id, time.time()), img_224)
-
-def process_image(image, predicts):
+def process_image(image, predicts, frame_num):
     h,w,c = image.shape
     face_size_threshold = 10
 
@@ -188,7 +195,7 @@ def process_image(image, predicts):
         cv2.putText(result_image, 'ID%d (%0.2f) (%d)' % (d[4],score, face_data.get_count(d[4])+1), 
             (d[0] - 5, d[1] - 5), cv2.FONT_HERSHEY_DUPLEX, 0.6, (0,0,0), 2)
 
-        # add
+        # add after check for bounds
         x1 = 0 if d[0] < 0 else d[0]
         y1 = 0 if d[1] < 0 else d[1]
         x2 = w if d[2] > w else d[2]
@@ -196,9 +203,9 @@ def process_image(image, predicts):
 
 
         face = image[y1:y2, x1:x2]
-        face_data.add(d[4],face, score)
+        face_data.add(d[4],face, score,frame_num)
 
-    # removed
+    # process removed
     for rm in removed:
         face_data.remove(rm)
 
@@ -213,28 +220,40 @@ if __name__ == '__main__':
     iou_thres = 0.2
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = load_model('./weights/yolov5s-face.pt', device)
-        
-    tracker = Sort(max_age=15, min_hits=0) 
-    face_data = FaceData()
 
-    cap = cv2.VideoCapture('./input/input.mp4')
+    #input video
+    input_video = './input/input.mp4'
+    cap = cv2.VideoCapture(input_video)
     length = int(cap. get(cv2. CAP_PROP_FRAME_COUNT))
-    frame_count = 0
+    input_FPS = int(cap. get(cv2. CAP_PROP_FPS))
+    print("Input video: %s FPS: %d"%(input_video, input_FPS))
 
+    #output video
+    output_video = './output/output.mp4'
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter('./output/output.mp4', fourcc, 30.0, (400,300))
+    out = cv2.VideoWriter(output_video, fourcc, input_FPS, (400,300))
 
+    #tracker and data saver
+    save_face_path = 'output/saved_faces'
+    tracker = Sort(max_age=15, min_hits=0) 
+    face_data = FaceData(save_path = save_face_path, input_FPS=input_FPS)
+
+    #for print
+    frame_count = 0
     count_time = time.time()
     all_time = time.time()
-
-    count_per_frames = 100
+    count_per_frames = 1000
 
     while (cap.isOpened()):
         ret,frame = cap.read()
         if ret:
+
+            #print
             frame_count = frame_count + 1
             if frame_count%count_per_frames == 0:
-                print(frame_count," of ", length)
+                print("---------------------------------------------------------------------------------")
+                print("----------------------------", frame_count," of ", length, "-----------------------------")
+                print("---------------------------------------------------------------------------------")
                 print("FPS (for %s): "%(count_per_frames), count_per_frames/(time.time()-count_time))
                 print("FPS (for all): ", frame_count/(time.time()-all_time))
                 print("Time all in minutes: %0.1f"%((time.time()-all_time)/60))
@@ -249,7 +268,8 @@ if __name__ == '__main__':
             # model forward
             predicts = detect(model, frame, device)
             
-            frame = process_image(image=frame, predicts=predicts)
+            # process prediction
+            frame = process_image(image=frame, predicts=predicts, frame_num=frame_count)
 
             # cv2.imshow('Video', frame)
             out.write(frame)
