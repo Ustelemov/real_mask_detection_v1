@@ -102,26 +102,18 @@ class FaceData:
         self.input_FPS = input_FPS
         self.faces = dict()
         self.save_path = save_path
-        self.all_detections_count_threshold = 10
-        self.all_detections_max_score_threshold = 0.65
-
-
-        # self.detections_count_threshold = 10
-        # self.detections_score_threshold = 0.65
-        # self.detections_max_score_threshold = 0.75
+        self.score_threshold = 0.8
 
         self.saved_count=0
 
     def add(self, id, arr, score, frame_num):
+        if score < self.score_threshold:
+            return
+
         if id not in self.faces:
             self.faces[id] = []
         self.faces[id].append((arr,score, frame_num))
     
-    def get_count(self,id):
-        if id not in self.faces:
-            return 0
-        return len(self.faces[id])
-
     def remove(self, id):
         if id not in self.faces:
             return
@@ -131,57 +123,25 @@ class FaceData:
         #remove element
         del self.faces[id]
 
-        #if not enought detections
-        if len(dataArr) < self.all_detections_count_threshold:
+        if len(dataArr) == 0:
             return
 
-        max_score = 0
-
-        score_65_count = 0
-        score_70_count = 0
-        score_75_count = 0
-        score_80_count = 0
-
-        img = []
-        frame_num = 0
+        img = dataArr[0][0]
+        frame_num = dataArr[0][2]
 
         for data in dataArr[:]:
-            if data[1] > max_score:
+            if img.shape[0] * img.shape[1] < data[0].shape[0] * data[0].shape[1]:
                 img = data[0]
-                max_score = data[1]
-                frame_num = data[2]
-            # if data[1] > self.detections_score_threshold:
-            #     score_threshold_count += 1
-            if data[1] > 0.65:
-                score_65_count += 1
-            if data[1] > 0.7:
-                score_70_count += 1
-            if data[1] > 0.75:
-                score_75_count += 1
-            if data[1] > 0.8:
-                score_80_count += 1
-
-         
-        # #if max_score not enough
-        # if max_score < self.detections_max_score_threshold:
-        #     return
-
-        # #if not enough detections with threshold score
-        # if score_threshold_count < self.detections_count_threshold:
-        #     return
-
-        if max_score < self.all_detections_max_score_threshold:
-            return
-
+                frame_num = data[2] 
+            
         mkdir(self.save_path)
 
         h,w,c = img.shape
         id = str(uuid.uuid1())
         frame_time = strftime("%H:%M:%S", gmtime(int(frame_num/self.input_FPS)))
 
-        cv2.imwrite("{0}/{1}__m:{2:.3f}_c65:{3}_c70:{4}_c75:{5}_c80:{6}_{7}_{8}_{9}.jpg"
-        .format(self.save_path, frame_time,max_score,
-        score_65_count, score_70_count,score_75_count,score_80_count, w,h,id), img)
+        cv2.imwrite("{0}/{1}_{2}_{3}_{4}.jpg"
+        .format(self.save_path, frame_time,w,h,id), img)
 
         #log for debug
         self.saved_count += 1
@@ -189,14 +149,13 @@ class FaceData:
         # print("score_threshold_count: ",score_threshold_count)
         print("time: ",frame_time)
         print("all_count: ",len(dataArr))
-        print("max_score: ",max_score)
         for data in dataArr:
             print("score: %0.2f shape: %s"%(data[1], data[0].shape))
         print("---------------------------------------------------------------------------------")
 
 def process_image(image, predicts, frame_num):
     h,w,c = image.shape
-    face_size_threshold = 10
+    face_size_threshold = 20
 
     result_image = image.copy()
     faces = []
@@ -214,7 +173,7 @@ def process_image(image, predicts, frame_num):
         d = d.astype(np.int32)
 
         cv2.rectangle(result_image, (d[0], d[1]), (d[2], d[3]), (0,0,0), 3)
-        cv2.putText(result_image, 'ID%d (%0.2f) (%d)' % (d[4],score, face_data.get_count(d[4])+1), 
+        cv2.putText(result_image, 'ID%d (%0.2f)' % (d[4],score), 
             (d[0] - 5, d[1] - 5), cv2.FONT_HERSHEY_DUPLEX, 0.6, (0,0,0), 2)
 
         # add after check for bounds
@@ -257,7 +216,7 @@ if __name__ == '__main__':
 
     #tracker and data saver
     save_face_path = 'output/saved_faces'
-    tracker = Sort(max_age=20, min_hits=0) 
+    tracker = Sort(max_age=20, min_hits=0)
     face_data = FaceData(save_path = save_face_path, input_FPS=input_FPS)
 
     #for print
