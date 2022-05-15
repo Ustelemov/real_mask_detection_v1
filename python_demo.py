@@ -103,6 +103,7 @@ class FaceData:
         self.faces = dict()
         self.save_path = save_path
         self.score_threshold = 0.8
+        self.count_threshold = 2
 
         self.saved_count=0
 
@@ -123,7 +124,7 @@ class FaceData:
         #remove element
         del self.faces[id]
 
-        if len(dataArr) == 0:
+        if len(dataArr) < self.count_threshold:
             return
 
         img = dataArr[0][0]
