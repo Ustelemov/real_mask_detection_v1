@@ -156,7 +156,7 @@ class FaceData:
 
 def process_image(image, predicts, frame_num):
     h,w,c = image.shape
-    face_size_threshold = 20
+    face_size_threshold = 35
 
     result_image = image.copy()
     faces = []
