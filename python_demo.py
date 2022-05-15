@@ -77,10 +77,10 @@ def detect(model, orgimg, device):
                 width = x_bottom_right - x_top_left
                 height = y_bottom_right - y_top_left
 
-                x_top_left = int(x_top_left - width*0.3)
-                y_top_left = int(y_top_left - height*0.3)
-                x_bottom_right = int(x_bottom_right + width*0.3)
-                y_bottom_right = int(y_bottom_right + height*0.3)
+                x_top_left = int(x_top_left - width*0.4)
+                y_top_left = int(y_top_left - height*0.4)
+                x_bottom_right = int(x_bottom_right + width*0.4)
+                y_bottom_right = int(y_bottom_right + height*0.4)
 
                 x_top_left = 0 if x_top_left < 0 else x_top_left
                 y_top_left = 0 if y_top_left < 0 else y_top_left
@@ -102,9 +102,13 @@ class FaceData:
         self.input_FPS = input_FPS
         self.faces = dict()
         self.save_path = save_path
-        self.detections_count_threshold = 10
-        self.detections_score_threshold = 0.7
-        self.detections_max_score_threshold = 0.75
+        self.all_detections_count_threshold = 10
+        self.all_detections_max_score_threshold = 0.65
+
+
+        # self.detections_count_threshold = 10
+        # self.detections_score_threshold = 0.65
+        # self.detections_max_score_threshold = 0.75
 
         self.saved_count=0
 
@@ -128,12 +132,16 @@ class FaceData:
         del self.faces[id]
 
         #if not enought detections
-        if len(dataArr) < self.detections_count_threshold:
+        if len(dataArr) < self.all_detections_count_threshold:
             return
 
         max_score = 0
 
-        score_threshold_count = 0
+        score_65_count = 0
+        score_70_count = 0
+        score_75_count = 0
+        score_80_count = 0
+
         img = []
         frame_num = 0
 
@@ -142,15 +150,27 @@ class FaceData:
                 img = data[0]
                 max_score = data[1]
                 frame_num = data[2]
-            if data[1] > self.detections_score_threshold:
-                score_threshold_count += 1
-            
-        #if max_score not enough
-        if max_score < self.detections_max_score_threshold:
-            return
+            # if data[1] > self.detections_score_threshold:
+            #     score_threshold_count += 1
+            if data[1] > 0.65:
+                score_65_count += 1
+            if data[1] > 0.7:
+                score_70_count += 1
+            if data[1] > 0.75:
+                score_75_count += 1
+            if data[1] > 0.8:
+                score_80_count += 1
 
-        #if not enough detections with threshold score
-        if score_threshold_count < self.detections_count_threshold:
+         
+        # #if max_score not enough
+        # if max_score < self.detections_max_score_threshold:
+        #     return
+
+        # #if not enough detections with threshold score
+        # if score_threshold_count < self.detections_count_threshold:
+        #     return
+
+        if max_score < self.all_detections_max_score_threshold:
             return
 
         mkdir(self.save_path)
@@ -159,15 +179,17 @@ class FaceData:
         id = str(uuid.uuid1())
         frame_time = strftime("%H:%M:%S", gmtime(int(frame_num/self.input_FPS)))
 
-        cv2.imwrite("{0}/{1}_{2}_{3}.jpg".format(self.save_path, id, w,h), img)
+        cv2.imwrite("{0}/{1}__m:{2:.3f}_c65:{3}_c70:{4}_c75:{5}_c80:{6}_{7}_{8}_{9}.jpg"
+        .format(self.save_path, frame_time,max_score,
+        score_65_count, score_70_count,score_75_count,score_80_count, w,h,id), img)
 
         #log for debug
         self.saved_count += 1
         print("---------saved id: %s (№ in dataset %s)---------"%(id, self.saved_count))
-        print("max_score: ",max_score)
-        print("all_count: ",len(dataArr))
-        print("score_threshold_count: ",score_threshold_count)
+        # print("score_threshold_count: ",score_threshold_count)
         print("time: ",frame_time)
+        print("all_count: ",len(dataArr))
+        print("max_score: ",max_score)
         for data in dataArr:
             print("score: %0.2f shape: %s"%(data[1], data[0].shape))
         print("---------------------------------------------------------------------------------")
@@ -235,7 +257,7 @@ if __name__ == '__main__':
 
     #tracker and data saver
     save_face_path = 'output/saved_faces'
-    tracker = Sort(max_age=15, min_hits=0) 
+    tracker = Sort(max_age=20, min_hits=0) 
     face_data = FaceData(save_path = save_face_path, input_FPS=input_FPS)
 
     #for print
