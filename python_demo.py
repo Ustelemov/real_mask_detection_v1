@@ -156,7 +156,7 @@ class FaceData:
 
 def process_image(image, predicts, frame_num):
     h,w,c = image.shape
-    face_size_threshold = 10
+    face_size_threshold = 35
 
     result_image = image.copy()
     faces = []
@@ -211,13 +211,13 @@ if __name__ == '__main__':
     print("Input video: %s FPS: %d"%(input_video, input_FPS))
 
     #output video
-    output_video = './output/output.mp4'
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_video, fourcc, 30, (400,400))
+    # output_video = './output/output.mp4'
+    # fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    # out = cv2.VideoWriter(output_video, fourcc, input_FPS, (400,300))
 
     #tracker and data saver
     save_face_path = 'output/saved_faces'
-    tracker = Sort(max_age=50, min_hits=0)
+    tracker = Sort(max_age=30, min_hits=0)
     face_data = FaceData(save_path = save_face_path, input_FPS=input_FPS)
 
     #for print
@@ -245,7 +245,7 @@ if __name__ == '__main__':
             frame = cv2.resize(frame, (1280,720))
 
             # get only entrance from image
-            frame = frame[:400,150:550]
+            frame = frame[100:400,150:550]
 
             # model forward
             predicts = detect(model, frame, device)
@@ -253,8 +253,8 @@ if __name__ == '__main__':
             # process prediction
             frame = process_image(image=frame, predicts=predicts, frame_num=frame_count)
 
-            cv2.imshow('Video', frame)
-            out.write(frame)
+            # cv2.imshow('Video', frame)
+            # out.write(frame)
 
             key = cv2.waitKey(1) & 0xFF
 
@@ -264,6 +264,6 @@ if __name__ == '__main__':
         else:
             break
 
-    out.release()
+    # out.release()
     cap.release()
     cv2.destroyAllWindows()

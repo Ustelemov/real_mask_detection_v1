@@ -135,7 +135,7 @@ class ImageProcessor:
     def __init__(self, input_FPS, detector_weights, classification_model_dir, classification_model_img_size, is_stream):
         self.face_detector = FaceDetector(weights=detector_weights)
         self.mask_classificator = MaskClassificator(model_dir=classification_model_dir, img_size=classification_model_img_size)
-        self.tracker = Sort(max_age=50, min_hits=0)
+        self.tracker = Sort(max_age=30, min_hits=0)
 
         self.faces = dict()
 
@@ -143,8 +143,8 @@ class ImageProcessor:
         self.is_stream = is_stream
         
         self.score_threshold = 0.8
-        self.count_threshold = 2
-        self.face_size_threshold = 10
+        self.count_threshold = 4
+        self.face_size_threshold = 35
 
         self.save_path = 'output'
         mkdir(self.save_path)
@@ -318,7 +318,7 @@ def main():
             image = cv2.resize(image, (1280,720))
 
             # get only entrance from image
-            image = image[:400,150:550]
+            image = image[100:400,150:550]
 
             # process image
             image_processor.process_image(image,image_count)
