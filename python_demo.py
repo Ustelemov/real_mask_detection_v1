@@ -60,7 +60,7 @@ def detect(model, orgimg, device):
     ret = []
 
     # Process detections
-    # Add 30% of width\height padding for face
+    # Add 40% of width\height padding for face
     for i, det in enumerate(pred):  # detections per image
         gn = torch.tensor(orgimg.shape)[[1, 0, 1, 0]].to(device)  # normalization gain whwh
         if len(det):
@@ -103,7 +103,7 @@ class FaceData:
         self.faces = dict()
         self.save_path = save_path
         self.score_threshold = 0.8
-        self.count_threshold = 2
+        self.count_threshold = 4
 
         self.saved_count=0
 
@@ -156,7 +156,7 @@ class FaceData:
 
 def process_image(image, predicts, frame_num):
     h,w,c = image.shape
-    face_size_threshold = 35
+    face_size_threshold = 10
 
     result_image = image.copy()
     faces = []
@@ -213,11 +213,11 @@ if __name__ == '__main__':
     #output video
     output_video = './output/output.mp4'
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_video, fourcc, input_FPS, (400,300))
+    out = cv2.VideoWriter(output_video, fourcc, 30, (400,400))
 
     #tracker and data saver
     save_face_path = 'output/saved_faces'
-    tracker = Sort(max_age=20, min_hits=0)
+    tracker = Sort(max_age=50, min_hits=0)
     face_data = FaceData(save_path = save_face_path, input_FPS=input_FPS)
 
     #for print
@@ -245,7 +245,7 @@ if __name__ == '__main__':
             frame = cv2.resize(frame, (1280,720))
 
             # get only entrance from image
-            frame = frame[100:400,150:550]
+            frame = frame[:400,150:550]
 
             # model forward
             predicts = detect(model, frame, device)
@@ -253,7 +253,7 @@ if __name__ == '__main__':
             # process prediction
             frame = process_image(image=frame, predicts=predicts, frame_num=frame_count)
 
-            # cv2.imshow('Video', frame)
+            cv2.imshow('Video', frame)
             out.write(frame)
 
             key = cv2.waitKey(1) & 0xFF
