@@ -1,23 +1,10 @@
 import argparse
-import time
-import cv2
-import torch
-import torch.backends.cudnn as cudnn
-import numpy as np
-from numpy import random
 import copy
 import os
 import sys
-import glob 
 import argparse
 import time
-import tensorflow_hub as hub
-import tensorflow as tf
-
-import urllib.request
-
-import uuid
-
+import urllib 
 from time import strftime
 from time import gmtime
 
@@ -25,10 +12,16 @@ from models.experimental import attempt_load
 from utils.datasets import letterbox
 from utils.general import check_img_size, non_max_suppression_face, apply_classifier, scale_coords, strip_optimizer, set_logging
 from utils.torch_utils import select_device, load_classifier, time_synchronized
-
 from sort import Sort
-import urllib 
+
+import cv2
+import torch
+import torch.backends.cudnn as cudnn
+import numpy as np
+import uuid
 import requests
+import tensorflow_hub as hub
+import tensorflow as tf
 
 class FaceDetector:
     def __init__(self, weights):
@@ -50,7 +43,6 @@ class FaceDetector:
         imgsz = check_img_size(self.img_size, s=self.model.stride.max())  # check img_size
 
         img = letterbox(img0, new_shape=imgsz)[0]
-        # Convert
         img = img[:, :, ::-1].transpose(2, 0, 1).copy()  # BGR to RGB, to 3x320x320
 
         img = torch.from_numpy(img).to(self.device)
@@ -115,9 +107,11 @@ class MaskClassificator:
         img0 = copy.deepcopy(orgimg)
         img0 = img0[...,::-1]
         img0 = np.array(img0)
+        
         # reshape into shape [batch_size, height, width, num_channels]
         img_reshaped = tf.reshape(img0, [1, img0.shape[0], img0.shape[1], img0.shape[2]])
-        # Use `convert_image_dtype` to convert to floats in the [0,1] range.
+       
+        # convert to floats in the [0,1] range.
         img_reshaped = tf.image.convert_image_dtype(img_reshaped, tf.float32)
         img_reshaped = tf.image.resize(img_reshaped, [self.img_size, self.img_size])
         return img_reshaped
@@ -143,7 +137,7 @@ class ImageProcessor:
         self.is_stream = is_stream
         
         self.score_threshold = 0.8
-        self.count_threshold = 4
+        self.count_threshold = 2
         self.face_size_threshold = 35
 
         self.save_path = 'output'
